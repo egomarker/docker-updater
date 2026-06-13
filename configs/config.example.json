@@ -1,0 +1,43 @@
+{
+  "server": {
+    "listen_address": "0.0.0.0:8765",
+    "bearer_token_file": "/Users/you/Library/Application Support/host-updater/token.txt"
+  },
+  "paths": {
+    "jobs_root": "/Users/you/Library/Application Support/host-updater/jobs",
+    "runtime_root": "/Users/you/Library/Application Support/host-updater/runtime"
+  },
+  "executables": {
+    "git": "/usr/bin/git",
+    "docker": "/usr/local/bin/docker"
+  },
+  "limits": {
+    "max_tail_lines": 10000
+  },
+  "projects": {
+    "piclaw": {
+      "repo_dir": "/Users/you/src/piclaw",
+      "git": {
+        "allowed_origins": ["origin", "fork"],
+        "allowed_branch_regexes": [
+          "^[A-Za-z0-9._/-]+$"
+        ]
+      },
+      "build": {
+        "cwd": "/Users/you/src/piclaw",
+        "context_dir": "/Users/you/src/piclaw",
+        "dockerfile": "/Users/you/src/piclaw/Dockerfile",
+        "latest_tag": "pibox:latest",
+        "commit_tag_prefix": "pibox:git-"
+      },
+      "compose": {
+        "cwd": "/Users/you/src/piclaw",
+        "files": [
+          "/Users/you/src/piclaw/docker-compose.yml"
+        ],
+        "primary_service": "pibox",
+        "services": ["pibox"]
+      }
+    }
+  }
+}
