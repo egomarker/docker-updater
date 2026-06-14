@@ -16,8 +16,8 @@
     "max_tail_lines": 10000
   },
   "projects": {
-    "piclaw": {
-      "repo_dir": "/Users/you/src/piclaw",
+    "{project}": {
+      "repo_dir": "/Users/you/src/{project}",
       "git": {
         "allowed_origins": ["origin", "fork"],
         "allowed_branch_regexes": [
@@ -25,23 +25,23 @@
         ]
       },
       "build": {
-        "cwd": "/Users/you/src/piclaw",
-        "context_dir": "/Users/you/src/piclaw",
-        "dockerfile": "/Users/you/src/piclaw/Dockerfile",
-        "latest_tag": "pibox:latest",
-        "commit_tag_prefix": "pibox:git-"
+        "cwd": "/Users/you/src/{project}",
+        "context_dir": "/Users/you/src/{project}",
+        "dockerfile": "/Users/you/src/{project}/Dockerfile",
+        "latest_tag": "{image}:latest",
+        "commit_tag_prefix": "{image}:git-"
       },
       "compose": {
-        "cwd": "/Users/you/src/piclaw",
+        "cwd": "/Users/you/src/{project}",
         "files": [
-          "/Users/you/src/piclaw/docker-compose.yml"
+          "/Users/you/src/{project}/docker-compose.yml"
         ],
-        "primary_service": "pibox",
-        "services": ["pibox"]
+        "primary_service": "{compose_service}",
+        "services": ["{compose_service}"]
       },
       "backup": {
         "sources": [
-          "/Users/you/Library/Application Support/piclaw"
+          "/Users/you/Library/Application Support/{project}"
         ],
         "destination": "/Users/you/Library/Application Support/host-updater/backups",
         "exclude": [
