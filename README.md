@@ -59,14 +59,14 @@ curl http://127.0.0.1:8765/v1/healthz
 curl -X POST \
   -H 'Authorization: Bearer YOUR_TOKEN' \
   -H 'Content-Type: application/json' \
-  http://127.0.0.1:8765/v1/projects/piclaw/deploy \
+  http://127.0.0.1:8765/v1/projects/{project}/deploy \
   -d '{"origin":"fork","branch":"feature/telegram","pull_base":true,"use_cache":true}'
 
 curl -H 'Authorization: Bearer YOUR_TOKEN' \
-  http://127.0.0.1:8765/v1/projects/piclaw/jobs/latest
+  http://127.0.0.1:8765/v1/projects/{project}/jobs/latest
 
 curl -H 'Authorization: Bearer YOUR_TOKEN' \
-  'http://127.0.0.1:8765/v1/projects/piclaw/jobs/latest/log?tail=100'
+  'http://127.0.0.1:8765/v1/projects/{project}/jobs/latest/log?tail=100'
 ```
 
 ## Build
