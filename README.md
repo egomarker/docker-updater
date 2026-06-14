@@ -20,6 +20,7 @@ v1 behavior:
 - binary entrypoint: `cmd/host-updater/main.go`
 - example config: `configs/config.example.json`
 - launchd sample: `launchd/com.example.host-updater.plist`
+- setup guide: `docs/SETUP.md`
 
 ## Default config path
 

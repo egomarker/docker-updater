@@ -424,7 +424,33 @@ tail -100 "$HOME/Library/Logs/host-updater/service.out.log" "$HOME/Library/Logs/
 
 ---
 
-## 16. Minimal success checklist
+## 16. Restart after rebuilding
+
+If you rebuilt `host-updater` and the LaunchAgent plist did **not** change, restart the running service with:
+
+```bash
+launchctl kickstart -k "gui/$(id -u)/<launchd-label>"
+```
+
+Then verify:
+
+```bash
+launchctl print "gui/$(id -u)/<launchd-label>"
+tail -50 "$HOME/Library/Logs/host-updater/service.out.log" \
+         "$HOME/Library/Logs/host-updater/service.err.log"
+```
+
+If you changed the plist, reload it first:
+
+```bash
+launchctl bootout "gui/$(id -u)" "$HOME/Library/LaunchAgents/<launchd-label>.plist" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/<launchd-label>.plist"
+launchctl kickstart -k "gui/$(id -u)/<launchd-label>"
+```
+
+Do **not** use `sudo` for a user LaunchAgent.
+
+## 17. Minimal success checklist
 
 You’re done when all of these work:
 
