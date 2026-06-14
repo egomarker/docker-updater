@@ -87,7 +87,8 @@ cat > "$HOME/Library/Application Support/host-updater/config.json" <<'EOF'
   },
   "executables": {
     "git": "/usr/bin/git",
-    "docker": "/usr/local/bin/docker"
+    "docker": "/usr/local/bin/docker",
+    "zip": "/usr/bin/zip"
   },
   "limits": {
     "max_tail_lines": 10000
@@ -360,6 +361,51 @@ curl -sS \
   -H "Authorization: Bearer $TOKEN" \
   "http://127.0.0.1:8765/v1/projects/<project>/jobs/latest/log?tail=200"
 ```
+
+---
+
+## 12b. Smoke test backup
+
+Requires a `backup` block configured on the project (see `configs/config.example.json`).
+
+Config rules:
+- `backup.destination` must be outside every configured `backup.sources` tree
+- `backup.sources` must have unique basenames in v1 because archive entries are stored as `<source>/...`
+
+Start a backup:
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  http://127.0.0.1:8765/v1/projects/<project>/backup \
+  -d '{}'
+```
+
+Inspect the result (the `backup.output_zip`, `output_bytes`, `remaining`, and `removed` fields are populated on success):
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:8765/v1/projects/<project>/jobs/latest
+
+curl -sS \
+  -H "Authorization: Bearer $TOKEN" \
+  "http://127.0.0.1:8765/v1/projects/<project>/jobs/latest/log?tail=200"
+```
+
+Verify the archive on disk and its contents:
+
+```bash
+ls -lh "$HOME/Library/Application Support/host-updater/backups"
+unzip -l "$HOME/Library/Application Support/host-updater/backups"/<project>-backup-*.zip | head
+```
+
+Expected:
+- entries are `<source>/...` (not absolute paths)
+- excluded folders are absent
+
+A backup on a project without a `backup` block returns `400 Bad Request` (`backup not configured for project`).
 
 ---
 

@@ -9,7 +9,8 @@
   },
   "executables": {
     "git": "/usr/bin/git",
-    "docker": "/usr/local/bin/docker"
+    "docker": "/usr/local/bin/docker",
+    "zip": "/usr/bin/zip"
   },
   "limits": {
     "max_tail_lines": 10000
@@ -37,6 +38,18 @@
         ],
         "primary_service": "pibox",
         "services": ["pibox"]
+      },
+      "backup": {
+        "sources": [
+          "/Users/you/Library/Application Support/piclaw"
+        ],
+        "destination": "/Users/you/Library/Application Support/host-updater/backups",
+        "exclude": [
+          "node_modules",
+          ".git"
+        ],
+        "symlinks": "store",
+        "retain": 5
       }
     }
   }

@@ -64,6 +64,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleDeploy(ctx, w, r, projectID)
 	case len(segments) == 4 && segments[3] == "restart":
 		h.handleRestart(ctx, w, r, projectID)
+	case len(segments) == 4 && segments[3] == "backup":
+		h.handleBackup(ctx, w, r, projectID)
 	case len(segments) == 5 && segments[3] == "jobs" && segments[4] == "latest":
 		h.handleLatestJob(ctx, w, r, projectID)
 	case len(segments) == 6 && segments[3] == "jobs" && segments[4] == "latest" && segments[5] == "log":
@@ -108,6 +110,24 @@ func (h *Handler) handleRestart(ctx context.Context, w http.ResponseWriter, r *h
 	}
 
 	meta, err := h.service.StartRestart(ctx, projectID)
+	if err != nil {
+		h.writeServiceError(w, err)
+		return
+	}
+
+	h.writeJSON(w, http.StatusAccepted, acceptedResponse(meta))
+}
+
+func (h *Handler) handleBackup(ctx context.Context, w http.ResponseWriter, r *http.Request, projectID string) {
+	if r.Method != http.MethodPost {
+		h.writeMethodNotAllowed(w)
+		return
+	}
+	if r.Body != nil {
+		_, _ = io.Copy(io.Discard, r.Body)
+	}
+
+	meta, err := h.service.StartBackup(ctx, projectID)
 	if err != nil {
 		h.writeServiceError(w, err)
 		return

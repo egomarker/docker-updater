@@ -176,6 +176,59 @@ func (s *Service) StartRestart(ctx context.Context, projectID string) (*model.Jo
 	return cloneMeta(meta), nil
 }
 
+func (s *Service) StartBackup(ctx context.Context, projectID string) (*model.JobMeta, error) {
+	project, err := s.project(projectID)
+	if err != nil {
+		return nil, err
+	}
+	if project.Backup == nil {
+		return nil, badRequest("backup not configured for project")
+	}
+
+	jobID, err := util.NewULID()
+	if err != nil {
+		return nil, internalError("generate job id", err)
+	}
+	if err := s.reserveProject(projectID, jobID); err != nil {
+		return nil, err
+	}
+
+	backupCfg := *project.Backup
+	symlinks := backupCfg.Symlinks
+	if symlinks == "" {
+		symlinks = "store"
+	}
+	now := time.Now().UTC()
+	meta := &model.JobMeta{
+		JobID:     jobID,
+		ProjectID: projectID,
+		Kind:      model.JobKindBackup,
+		Status:    model.JobStatusRunning,
+		Phase:     model.JobPhasePreflight,
+		CreatedAt: now,
+		StartedAt: now,
+		Backup: &model.JobBackupState{
+			Sources:     backupCfg.Sources,
+			Destination: backupCfg.Destination,
+			Exclude:     backupCfg.Exclude,
+			Symlinks:    symlinks,
+			Retain:      backupCfg.Retain,
+		},
+	}
+
+	if err := s.store.CreateJob(meta); err != nil {
+		s.releaseProject(projectID, jobID)
+		return nil, internalError("create job", err)
+	}
+
+	go func(job *model.JobMeta, projectCfg model.ProjectConfig) {
+		defer s.releaseProject(projectID, job.JobID)
+		s.runBackup(job, projectCfg)
+	}(meta, project)
+
+	return cloneMeta(meta), nil
+}
+
 func (s *Service) GetJob(ctx context.Context, projectID, jobID string) (*model.JobMeta, error) {
 	if _, err := s.project(projectID); err != nil {
 		return nil, err
@@ -372,6 +425,12 @@ func cloneMeta(meta *model.JobMeta) *model.JobMeta {
 		PredeployImageID:   copyStringPtr(meta.Image.PredeployImageID),
 		RollbackTag:        copyStringPtr(meta.Image.RollbackTag),
 		ActiveTag:          copyStringPtr(meta.Image.ActiveTag),
+	}
+	if meta.Backup != nil {
+		backup := *meta.Backup
+		backup.Sources = append([]string(nil), meta.Backup.Sources...)
+		backup.Exclude = append([]string(nil), meta.Backup.Exclude...)
+		clone.Backup = &backup
 	}
 	if meta.FinishedAt != nil {
 		finishedAt := *meta.FinishedAt

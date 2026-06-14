@@ -27,6 +27,7 @@ type PathsConfig struct {
 type ExecutablesConfig struct {
 	Git    string `json:"git"`
 	Docker string `json:"docker"`
+	Zip    string `json:"zip"` // optional; defaults to /usr/bin/zip when any project has backup configured
 }
 
 type LimitsConfig struct {
@@ -38,6 +39,15 @@ type ProjectConfig struct {
 	Git     GitProjectConfig `json:"git"`
 	Build   BuildConfig      `json:"build"`
 	Compose ComposeConfig    `json:"compose"`
+	Backup  *BackupConfig    `json:"backup,omitempty"`
+}
+
+type BackupConfig struct {
+	Sources     []string `json:"sources"`
+	Destination string   `json:"destination"`
+	Exclude     []string `json:"exclude"`       // optional; raw entries, applied as tree-wide globs
+	Symlinks    string   `json:"symlinks"`      // "store" (default) | "follow"
+	Retain      int      `json:"retain"`        // 0/unset = unlimited
 }
 
 type GitProjectConfig struct {
@@ -120,6 +130,7 @@ type JobPhase string
 const (
 	JobKindDeploy  JobKind = "deploy"
 	JobKindRestart JobKind = "restart"
+	JobKindBackup  JobKind = "backup"
 )
 
 const (
@@ -141,6 +152,8 @@ const (
 	JobPhaseDeploy     JobPhase = "deploy"
 	JobPhaseRestart    JobPhase = "restart"
 	JobPhaseRollback   JobPhase = "rollback"
+	JobPhaseZip        JobPhase = "zip"
+	JobPhaseRetention  JobPhase = "retention"
 	JobPhaseDone       JobPhase = "done"
 )
 
@@ -156,7 +169,20 @@ type JobMeta struct {
 	Request    *JobRequest `json:"request,omitempty"`
 	Repo       JobRepoState `json:"repo"`
 	Image      JobImageState `json:"image"`
+	Backup     *JobBackupState `json:"backup,omitempty"`
 	Error      *JobError   `json:"error"`
+}
+
+type JobBackupState struct {
+	Sources     []string `json:"sources"`
+	Destination string   `json:"destination"`
+	Exclude     []string `json:"exclude,omitempty"` // raw configured entries (not expanded globs)
+	Symlinks    string   `json:"symlinks"`
+	OutputZip   string   `json:"output_zip,omitempty"`
+	OutputBytes int64    `json:"output_bytes,omitempty"`
+	Retain      int      `json:"retain"`
+	Remaining   int      `json:"remaining,omitempty"`
+	Removed     int      `json:"removed,omitempty"`
 }
 
 type JobRequest struct {

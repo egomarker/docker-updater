@@ -14,6 +14,7 @@ import (
 )
 
 const defaultMaxTailLines = 10000
+const defaultZipPath = "/usr/bin/zip"
 
 func DefaultPath() string {
 	home, err := os.UserHomeDir()
@@ -63,6 +64,10 @@ func applyDefaults(cfg *model.Config, baseDir string) {
 	cfg.Paths.RuntimeRoot = resolvePath(baseDir, cfg.Paths.RuntimeRoot)
 	cfg.Executables.Git = expandHomeOnly(cfg.Executables.Git)
 	cfg.Executables.Docker = expandHomeOnly(cfg.Executables.Docker)
+	cfg.Executables.Zip = expandHomeOnly(cfg.Executables.Zip)
+	if cfg.Executables.Zip == "" && anyBackupConfigured(cfg) {
+		cfg.Executables.Zip = defaultZipPath
+	}
 
 	if cfg.Limits.MaxTailLines <= 0 {
 		cfg.Limits.MaxTailLines = defaultMaxTailLines
@@ -92,6 +97,15 @@ func applyDefaults(cfg *model.Config, baseDir string) {
 		}
 		if project.Compose.PrimaryService == "" && len(project.Compose.Services) == 1 {
 			project.Compose.PrimaryService = project.Compose.Services[0]
+		}
+
+		if project.Backup != nil {
+			backup := *project.Backup
+			for i, src := range backup.Sources {
+				backup.Sources[i] = resolvePath(baseDir, src)
+			}
+			backup.Destination = resolvePath(baseDir, backup.Destination)
+			project.Backup = &backup
 		}
 
 		cfg.Projects[projectID] = project
@@ -169,6 +183,12 @@ func validate(cfg *model.Config) error {
 			return fmt.Errorf("config.projects.%s.compose.primary_service is required", projectID)
 		}
 
+		if project.Backup != nil {
+			if err := validateBackup(projectID, project.Backup); err != nil {
+				return err
+			}
+		}
+
 		cfg.Projects[projectID] = project
 	}
 
@@ -179,7 +199,93 @@ func validate(cfg *model.Config) error {
 		return fmt.Errorf("config.executables.docker: %w", err)
 	}
 
+	if anyBackupConfigured(cfg) {
+		zipPath := strings.TrimSpace(cfg.Executables.Zip)
+		if zipPath == "" {
+			zipPath = defaultZipPath
+		}
+		if err := validateExecutablePath(zipPath); err != nil {
+			return fmt.Errorf("config.executables.zip: %w", err)
+		}
+	}
+
 	return nil
+}
+
+func validateBackup(projectID string, backup *model.BackupConfig) error {
+	if backup == nil {
+		return nil
+	}
+	if len(backup.Sources) == 0 {
+		return fmt.Errorf("config.projects.%s.backup.sources must not be empty", projectID)
+	}
+
+	seenSources := make(map[string]struct{}, len(backup.Sources))
+	seenBaseNames := make(map[string]string, len(backup.Sources))
+	cleanSources := make([]string, 0, len(backup.Sources))
+	for _, src := range backup.Sources {
+		cleanSrc := filepath.Clean(strings.TrimSpace(src))
+		if cleanSrc == "." || cleanSrc == "" {
+			return fmt.Errorf("config.projects.%s.backup.sources contains an empty path", projectID)
+		}
+		if _, exists := seenSources[cleanSrc]; exists {
+			return fmt.Errorf("config.projects.%s.backup.sources contains duplicate path %q", projectID, cleanSrc)
+		}
+		seenSources[cleanSrc] = struct{}{}
+		baseName := filepath.Base(cleanSrc)
+		if previous, exists := seenBaseNames[baseName]; exists {
+			return fmt.Errorf("config.projects.%s.backup.sources contain duplicate basename %q (%q and %q)", projectID, baseName, previous, cleanSrc)
+		}
+		seenBaseNames[baseName] = cleanSrc
+		cleanSources = append(cleanSources, cleanSrc)
+	}
+
+	cleanDestination := filepath.Clean(strings.TrimSpace(backup.Destination))
+	if cleanDestination == "." || cleanDestination == "" {
+		return fmt.Errorf("config.projects.%s.backup.destination is required", projectID)
+	}
+	for _, src := range cleanSources {
+		if isSameOrDescendant(cleanDestination, src) {
+			return fmt.Errorf("config.projects.%s.backup.destination must not be inside backup source %q", projectID, src)
+		}
+	}
+	for _, entry := range backup.Exclude {
+		if strings.TrimSpace(entry) == "" {
+			return fmt.Errorf("config.projects.%s.backup.exclude contains an empty entry", projectID)
+		}
+	}
+	switch symlinks := strings.TrimSpace(backup.Symlinks); symlinks {
+	case "", "store", "follow":
+	default:
+		return fmt.Errorf("config.projects.%s.backup.symlinks must be \"store\" or \"follow\"", projectID)
+	}
+	if backup.Retain < 0 {
+		return fmt.Errorf("config.projects.%s.backup.retain must be non-negative", projectID)
+	}
+	return nil
+}
+
+func isSameOrDescendant(path, root string) bool {
+	path = filepath.Clean(path)
+	root = filepath.Clean(root)
+
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+}
+
+func anyBackupConfigured(cfg *model.Config) bool {
+	for _, project := range cfg.Projects {
+		if project.Backup != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func validateExecutablePath(value string) error {

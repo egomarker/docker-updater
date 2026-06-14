@@ -1,6 +1,6 @@
 # docker-updater
 
-Small host-side HTTP service for Git + Docker Compose deploy/restart jobs.
+Small host-side HTTP service for Git + Docker Compose deploy/restart/backup jobs.
 
 ## Scope
 
@@ -10,6 +10,7 @@ v1 behavior:
 - one updater-managed mutable image per project
 - deploy via `git fetch` + `git checkout` + `git pull --ff-only` + `docker build` + `docker compose up -d --force-recreate`
 - restart via `docker compose restart`
+- backup via timestamped zip with optional folder exclusions and retention
 - runtime rollback only on deploy cutover failure
 - no repo restore
 - no app health checks
@@ -31,6 +32,7 @@ v1 behavior:
 - `GET /v1/healthz`
 - `POST /v1/projects/{project}/deploy`
 - `POST /v1/projects/{project}/restart`
+- `POST /v1/projects/{project}/backup`
 - `GET /v1/projects/{project}/jobs/{id}`
 - `GET /v1/projects/{project}/jobs/{id}/log?tail=N`
 - `GET /v1/projects/{project}/jobs/latest`
@@ -43,6 +45,11 @@ All endpoints except `/v1/healthz` require:
 ## Example config
 
 Start from `configs/config.example.json` and adjust paths, token file, image tag, compose files, and project names.
+
+Backup config rules:
+
+- `backup.destination` must be outside every `backup.sources` tree
+- `backup.sources` must have unique basenames in v1 because archive entries are stored as `<source>/...`
 
 ## Example curl
 
