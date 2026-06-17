@@ -52,5 +52,18 @@
         "retain": 5
       }
     }
+  },
+  "scripts": {
+    "rotate-logs": {
+      "runner": "/bin/sh",
+      "path": "/Users/you/scripts/rotate-logs.sh",
+      "cwd": "/Users/you",
+      "timeout_seconds": 600
+    },
+    "db-cleanup": {
+      "runner": "/usr/bin/python3",
+      "path": "/Users/you/scripts/db_cleanup.py",
+      "timeout_seconds": 120
+    }
   }
 }

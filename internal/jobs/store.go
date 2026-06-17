@@ -154,6 +154,9 @@ func (s *Store) ListRunningJobs() ([]*model.JobMeta, error) {
 			}
 			meta, err := s.GetJob(projectID, jobEntry.Name())
 			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
 				return nil, err
 			}
 			if meta.Status == model.JobStatusRunning {

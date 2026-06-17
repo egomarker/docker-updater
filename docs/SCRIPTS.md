@@ -1,6 +1,6 @@
 # run_script — Host Scripts Feature (v1)
 
-Status: spec, not yet implemented.
+Status: implemented in v1.1.0.
 
 ## Goal
 

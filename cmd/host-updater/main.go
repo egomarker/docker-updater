@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 	"github.com/egomarker/docker-updater/internal/update"
 )
 
-const version = "1.0.0"
+const version = "1.1.0"
 
 func main() {
 	var configPath string
@@ -47,18 +48,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	store, err := jobs.NewStore(cfg.Paths.JobsRoot)
+	projectStore, err := jobs.NewStore(cfg.Paths.JobsRoot)
 	if err != nil {
-		logger.Error("init jobs store failed", "error", err)
+		logger.Error("init project jobs store failed", "error", err)
+		os.Exit(1)
+	}
+	scriptStore, err := jobs.NewStore(filepath.Join(cfg.Paths.JobsRoot, "scripts"))
+	if err != nil {
+		logger.Error("init script jobs store failed", "error", err)
 		os.Exit(1)
 	}
 
-	if err := startup.RecoverRunningJobs(store, cfg.Paths.RuntimeRoot); err != nil {
-		logger.Error("startup recovery failed", "error", err)
+	if err := startup.RecoverRunningJobs(projectStore, cfg.Paths.RuntimeRoot); err != nil {
+		logger.Error("project startup recovery failed", "error", err)
+		os.Exit(1)
+	}
+	if err := startup.RecoverRunningJobs(scriptStore, cfg.Paths.RuntimeRoot); err != nil {
+		logger.Error("script startup recovery failed", "error", err)
 		os.Exit(1)
 	}
 
-	service := update.NewService(cfg, store, logger)
+	service := update.NewService(cfg, projectStore, scriptStore, logger)
 	handler := api.NewHandler(token, version, service, cfg.Limits.MaxTailLines)
 
 	server := &http.Server{

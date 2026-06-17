@@ -15,6 +15,7 @@ import (
 
 const defaultMaxTailLines = 10000
 const defaultZipPath = "/usr/bin/zip"
+const defaultScriptTimeoutSeconds = 600
 
 func DefaultPath() string {
 	home, err := os.UserHomeDir()
@@ -110,6 +111,19 @@ func applyDefaults(cfg *model.Config, baseDir string) {
 
 		cfg.Projects[projectID] = project
 	}
+
+	for scriptName, script := range cfg.Scripts {
+		script.Runner = resolveExecutablePath(baseDir, script.Runner)
+		script.Path = resolvePath(baseDir, script.Path)
+		if script.Cwd == "" && script.Path != "" {
+			script.Cwd = filepath.Dir(script.Path)
+		}
+		script.Cwd = resolvePath(baseDir, script.Cwd)
+		if script.TimeoutSeconds <= 0 {
+			script.TimeoutSeconds = defaultScriptTimeoutSeconds
+		}
+		cfg.Scripts[scriptName] = script
+	}
 }
 
 func validate(cfg *model.Config) error {
@@ -137,10 +151,16 @@ func validate(cfg *model.Config) error {
 	if len(cfg.Projects) == 0 {
 		return fmt.Errorf("config.projects must not be empty")
 	}
+	if cfg.Scripts != nil && len(cfg.Scripts) == 0 {
+		return fmt.Errorf("config.scripts must not be empty")
+	}
 
 	for projectID, project := range cfg.Projects {
 		if strings.TrimSpace(projectID) == "" {
 			return fmt.Errorf("config.projects contains an empty project id")
+		}
+		if projectID == "scripts" {
+			return fmt.Errorf("config.projects.%s is reserved", projectID)
 		}
 		if strings.TrimSpace(project.RepoDir) == "" {
 			return fmt.Errorf("config.projects.%s.repo_dir is required", projectID)
@@ -190,6 +210,28 @@ func validate(cfg *model.Config) error {
 		}
 
 		cfg.Projects[projectID] = project
+	}
+
+	for scriptName, script := range cfg.Scripts {
+		if !isValidScriptName(scriptName) {
+			return fmt.Errorf("config.scripts.%s invalid (must match ^[a-z0-9._-]+$)", scriptName)
+		}
+		if strings.TrimSpace(script.Runner) == "" {
+			return fmt.Errorf("config.scripts.%s.runner is required", scriptName)
+		}
+		if err := validateExecutablePath(script.Runner); err != nil {
+			return fmt.Errorf("config.scripts.%s.runner: %w", scriptName, err)
+		}
+		if strings.TrimSpace(script.Path) == "" {
+			return fmt.Errorf("config.scripts.%s.path is required", scriptName)
+		}
+		if strings.TrimSpace(script.Cwd) == "" {
+			return fmt.Errorf("config.scripts.%s.cwd is required", scriptName)
+		}
+		if script.TimeoutSeconds <= 0 {
+			return fmt.Errorf("config.scripts.%s.timeout_seconds must be positive", scriptName)
+		}
+		cfg.Scripts[scriptName] = script
 	}
 
 	if err := validateExecutablePath(cfg.Executables.Git); err != nil {
@@ -279,6 +321,11 @@ func isSameOrDescendant(path, root string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
 }
 
+func isValidScriptName(name string) bool {
+	matched, err := regexp.MatchString("^[a-z0-9._-]+$", name)
+	return err == nil && matched
+}
+
 func anyBackupConfigured(cfg *model.Config) bool {
 	for _, project := range cfg.Projects {
 		if project.Backup != nil {
@@ -297,6 +344,20 @@ func validateExecutablePath(value string) error {
 	}
 	_, err := exec.LookPath(value)
 	return err
+}
+
+func resolveExecutablePath(baseDir, value string) string {
+	value = expandHomeOnly(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	if filepath.IsAbs(value) {
+		return filepath.Clean(value)
+	}
+	if strings.ContainsRune(value, filepath.Separator) {
+		return filepath.Clean(filepath.Join(baseDir, value))
+	}
+	return value
 }
 
 func resolvePath(baseDir, value string) string {

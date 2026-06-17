@@ -118,6 +118,19 @@ cat > "$HOME/Library/Application Support/host-updater/config.json" <<'EOF'
         "services": ["<compose-service>"]
       }
     }
+  },
+  "scripts": {
+    "rotate-logs": {
+      "runner": "/bin/sh",
+      "path": "/Users/you/scripts/rotate-logs.sh",
+      "cwd": "/Users/you",
+      "timeout_seconds": 600
+    },
+    "db-cleanup": {
+      "runner": "/usr/bin/python3",
+      "path": "/Users/you/scripts/db_cleanup.py",
+      "timeout_seconds": 120
+    }
   }
 }
 EOF
@@ -128,6 +141,11 @@ Notes:
 - `allowed_origins` is just an example; adjust it to your actual remotes.
 - If your compose file is not `docker-compose.yml`, replace that path too.
 - If your project has multiple services sharing the same mutable image, you can list them all in `services`.
+- Top-level `scripts` is optional, but if present it must not be empty.
+- Script names must match `^[a-z0-9._-]+$`.
+- Project id `scripts` is reserved.
+- Script `cwd` defaults to the directory containing `path` if omitted.
+- Script `timeout_seconds` defaults to `600` if omitted.
 
 Sanity check:
 
@@ -154,7 +172,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.0.0"}
+{"status":"ok","version":"1.1.0"}
 ```
 
 If that works, stop the foreground process with `Ctrl+C`.
@@ -281,7 +299,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.0.0"}
+{"status":"ok","version":"1.1.0"}
 ```
 
 From inside a Docker container that should call the updater:
@@ -406,6 +424,39 @@ Expected:
 - excluded folders are absent
 
 A backup on a project without a `backup` block returns `400 Bad Request` (`backup not configured for project`).
+
+---
+
+## 12c. Smoke test script jobs
+
+Requires a top-level `scripts` config block and a configured script name.
+
+Start a script:
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:8765/v1/scripts/rotate-logs
+```
+
+Inspect the latest job and log:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:8765/v1/scripts/rotate-logs/jobs/latest
+
+curl -sS \
+  -H "Authorization: Bearer $TOKEN" \
+  "http://127.0.0.1:8765/v1/scripts/rotate-logs/jobs/latest/log?tail=200"
+```
+
+Expected:
+- `kind` is `script`
+- `phase` advances through `preflight` → `script` → `done`
+- success/failure is recorded in normal job meta and logs
+
+An unknown script name returns `404 Not Found` (`script not found`).
 
 ---
 

@@ -7,11 +7,12 @@ import (
 )
 
 type Config struct {
-	Server      ServerConfig            `json:"server"`
-	Paths       PathsConfig             `json:"paths"`
-	Executables ExecutablesConfig       `json:"executables"`
-	Limits      LimitsConfig            `json:"limits"`
+	Server      ServerConfig             `json:"server"`
+	Paths       PathsConfig              `json:"paths"`
+	Executables ExecutablesConfig        `json:"executables"`
+	Limits      LimitsConfig             `json:"limits"`
 	Projects    map[string]ProjectConfig `json:"projects"`
+	Scripts     map[string]ScriptConfig  `json:"scripts,omitempty"`
 }
 
 type ServerConfig struct {
@@ -48,6 +49,13 @@ type BackupConfig struct {
 	Exclude     []string `json:"exclude"`       // optional; raw entries, applied as tree-wide globs
 	Symlinks    string   `json:"symlinks"`      // "store" (default) | "follow"
 	Retain      int      `json:"retain"`        // 0/unset = unlimited
+}
+
+type ScriptConfig struct {
+	Runner         string `json:"runner"`
+	Path           string `json:"path"`
+	Cwd            string `json:"cwd"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
 }
 
 type GitProjectConfig struct {
@@ -131,6 +139,7 @@ const (
 	JobKindDeploy  JobKind = "deploy"
 	JobKindRestart JobKind = "restart"
 	JobKindBackup  JobKind = "backup"
+	JobKindScript  JobKind = "script"
 )
 
 const (
@@ -143,34 +152,36 @@ const (
 )
 
 const (
-	JobPhasePreflight  JobPhase = "preflight"
-	JobPhaseSnapshot   JobPhase = "snapshot"
-	JobPhaseGitFetch   JobPhase = "git_fetch"
+	JobPhasePreflight   JobPhase = "preflight"
+	JobPhaseSnapshot    JobPhase = "snapshot"
+	JobPhaseGitFetch    JobPhase = "git_fetch"
 	JobPhaseGitCheckout JobPhase = "git_checkout"
-	JobPhaseGitPull    JobPhase = "git_pull"
-	JobPhaseBuild      JobPhase = "build"
-	JobPhaseDeploy     JobPhase = "deploy"
-	JobPhaseRestart    JobPhase = "restart"
-	JobPhaseRollback   JobPhase = "rollback"
-	JobPhaseZip        JobPhase = "zip"
-	JobPhaseRetention  JobPhase = "retention"
-	JobPhaseDone       JobPhase = "done"
+	JobPhaseGitPull     JobPhase = "git_pull"
+	JobPhaseBuild       JobPhase = "build"
+	JobPhaseDeploy      JobPhase = "deploy"
+	JobPhaseRestart     JobPhase = "restart"
+	JobPhaseRollback    JobPhase = "rollback"
+	JobPhaseZip         JobPhase = "zip"
+	JobPhaseRetention   JobPhase = "retention"
+	JobPhaseScript      JobPhase = "script"
+	JobPhaseDone        JobPhase = "done"
 )
 
 type JobMeta struct {
-	JobID      string      `json:"job_id"`
-	ProjectID  string      `json:"project_id"`
-	Kind       JobKind     `json:"kind"`
-	Status     JobStatus   `json:"status"`
-	Phase      JobPhase    `json:"phase"`
-	CreatedAt  time.Time   `json:"created_at"`
-	StartedAt  time.Time   `json:"started_at"`
-	FinishedAt *time.Time  `json:"finished_at"`
-	Request    *JobRequest `json:"request,omitempty"`
-	Repo       JobRepoState `json:"repo"`
-	Image      JobImageState `json:"image"`
-	Backup     *JobBackupState `json:"backup,omitempty"`
-	Error      *JobError   `json:"error"`
+	JobID      string           `json:"job_id"`
+	ProjectID  string           `json:"project_id"`
+	Kind       JobKind          `json:"kind"`
+	Status     JobStatus        `json:"status"`
+	Phase      JobPhase         `json:"phase"`
+	CreatedAt  time.Time        `json:"created_at"`
+	StartedAt  time.Time        `json:"started_at"`
+	FinishedAt *time.Time       `json:"finished_at"`
+	Request    *JobRequest      `json:"request,omitempty"`
+	Repo       JobRepoState     `json:"repo"`
+	Image      JobImageState    `json:"image"`
+	Backup     *JobBackupState  `json:"backup,omitempty"`
+	Script     *JobScriptState  `json:"script,omitempty"`
+	Error      *JobError        `json:"error"`
 }
 
 type JobBackupState struct {
@@ -183,6 +194,13 @@ type JobBackupState struct {
 	Retain      int      `json:"retain"`
 	Remaining   int      `json:"remaining,omitempty"`
 	Removed     int      `json:"removed,omitempty"`
+}
+
+type JobScriptState struct {
+	Name   string `json:"name"`
+	Runner string `json:"runner"`
+	Path   string `json:"path"`
+	Cwd    string `json:"cwd"`
 }
 
 type JobRequest struct {

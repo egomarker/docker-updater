@@ -51,29 +51,54 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	segments := splitPath(r.URL.Path)
-	if len(segments) < 4 || segments[0] != "v1" || segments[1] != "projects" {
+	if len(segments) < 3 || segments[0] != "v1" {
 		h.writeError(w, http.StatusNotFound, "not found", nil)
 		return
 	}
 
-	projectID := segments[2]
 	ctx := r.Context()
 
-	switch {
-	case len(segments) == 4 && segments[3] == "deploy":
-		h.handleDeploy(ctx, w, r, projectID)
-	case len(segments) == 4 && segments[3] == "restart":
-		h.handleRestart(ctx, w, r, projectID)
-	case len(segments) == 4 && segments[3] == "backup":
-		h.handleBackup(ctx, w, r, projectID)
-	case len(segments) == 5 && segments[3] == "jobs" && segments[4] == "latest":
-		h.handleLatestJob(ctx, w, r, projectID)
-	case len(segments) == 6 && segments[3] == "jobs" && segments[4] == "latest" && segments[5] == "log":
-		h.handleLatestJobLog(ctx, w, r, projectID)
-	case len(segments) == 5 && segments[3] == "jobs":
-		h.handleJob(ctx, w, r, projectID, segments[4])
-	case len(segments) == 6 && segments[3] == "jobs" && segments[5] == "log":
-		h.handleJobLog(ctx, w, r, projectID, segments[4])
+	switch segments[1] {
+	case "projects":
+		if len(segments) < 4 {
+			h.writeError(w, http.StatusNotFound, "not found", nil)
+			return
+		}
+		projectID := segments[2]
+		switch {
+		case len(segments) == 4 && segments[3] == "deploy":
+			h.handleDeploy(ctx, w, r, projectID)
+		case len(segments) == 4 && segments[3] == "restart":
+			h.handleRestart(ctx, w, r, projectID)
+		case len(segments) == 4 && segments[3] == "backup":
+			h.handleBackup(ctx, w, r, projectID)
+		case len(segments) == 5 && segments[3] == "jobs" && segments[4] == "latest":
+			h.handleLatestJob(ctx, w, r, projectID)
+		case len(segments) == 6 && segments[3] == "jobs" && segments[4] == "latest" && segments[5] == "log":
+			h.handleLatestJobLog(ctx, w, r, projectID)
+		case len(segments) == 5 && segments[3] == "jobs":
+			h.handleJob(ctx, w, r, projectID, segments[4])
+		case len(segments) == 6 && segments[3] == "jobs" && segments[5] == "log":
+			h.handleJobLog(ctx, w, r, projectID, segments[4])
+		default:
+			h.writeError(w, http.StatusNotFound, "not found", nil)
+		}
+	case "scripts":
+		scriptName := segments[2]
+		switch {
+		case len(segments) == 3:
+			h.handleStartScript(ctx, w, r, scriptName)
+		case len(segments) == 5 && segments[3] == "jobs" && segments[4] == "latest":
+			h.handleLatestScriptJob(ctx, w, r, scriptName)
+		case len(segments) == 6 && segments[3] == "jobs" && segments[4] == "latest" && segments[5] == "log":
+			h.handleLatestScriptJobLog(ctx, w, r, scriptName)
+		case len(segments) == 5 && segments[3] == "jobs":
+			h.handleScriptJob(ctx, w, r, scriptName, segments[4])
+		case len(segments) == 6 && segments[3] == "jobs" && segments[5] == "log":
+			h.handleScriptJobLog(ctx, w, r, scriptName, segments[4])
+		default:
+			h.writeError(w, http.StatusNotFound, "not found", nil)
+		}
 	default:
 		h.writeError(w, http.StatusNotFound, "not found", nil)
 	}
@@ -136,6 +161,24 @@ func (h *Handler) handleBackup(ctx context.Context, w http.ResponseWriter, r *ht
 	h.writeJSON(w, http.StatusAccepted, acceptedResponse(meta))
 }
 
+func (h *Handler) handleStartScript(ctx context.Context, w http.ResponseWriter, r *http.Request, name string) {
+	if r.Method != http.MethodPost {
+		h.writeMethodNotAllowed(w)
+		return
+	}
+	if r.Body != nil {
+		_, _ = io.Copy(io.Discard, r.Body)
+	}
+
+	meta, err := h.service.StartScript(ctx, name)
+	if err != nil {
+		h.writeServiceError(w, err)
+		return
+	}
+
+	h.writeJSON(w, http.StatusAccepted, acceptedResponse(meta))
+}
+
 func (h *Handler) handleJob(ctx context.Context, w http.ResponseWriter, r *http.Request, projectID, jobID string) {
 	if r.Method != http.MethodGet {
 		h.writeMethodNotAllowed(w)
@@ -173,6 +216,68 @@ func (h *Handler) handleJobLog(ctx context.Context, w http.ResponseWriter, r *ht
 		return
 	}
 	logText, err := h.service.GetJobLog(ctx, projectID, jobID, tail)
+	if err != nil {
+		h.writeServiceError(w, err)
+		return
+	}
+	h.writeText(w, http.StatusOK, logText)
+}
+
+func (h *Handler) handleLatestScriptJob(ctx context.Context, w http.ResponseWriter, r *http.Request, name string) {
+	if r.Method != http.MethodGet {
+		h.writeMethodNotAllowed(w)
+		return
+	}
+	meta, err := h.service.GetLatestScriptJob(ctx, name)
+	if err != nil {
+		h.writeServiceError(w, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, meta)
+}
+
+func (h *Handler) handleScriptJob(ctx context.Context, w http.ResponseWriter, r *http.Request, name, jobID string) {
+	if r.Method != http.MethodGet {
+		h.writeMethodNotAllowed(w)
+		return
+	}
+	meta, err := h.service.GetScriptJob(ctx, name, jobID)
+	if err != nil {
+		h.writeServiceError(w, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, meta)
+}
+
+func (h *Handler) handleScriptJobLog(ctx context.Context, w http.ResponseWriter, r *http.Request, name, jobID string) {
+	if r.Method != http.MethodGet {
+		h.writeMethodNotAllowed(w)
+		return
+	}
+	tail, err := h.parseTail(r)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+	logText, err := h.service.GetScriptJobLog(ctx, name, jobID, tail)
+	if err != nil {
+		h.writeServiceError(w, err)
+		return
+	}
+	h.writeText(w, http.StatusOK, logText)
+}
+
+func (h *Handler) handleLatestScriptJobLog(ctx context.Context, w http.ResponseWriter, r *http.Request, name string) {
+	if r.Method != http.MethodGet {
+		h.writeMethodNotAllowed(w)
+		return
+	}
+	tail, err := h.parseTail(r)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+	logText, err := h.service.GetLatestScriptJobLog(ctx, name, tail)
 	if err != nil {
 		h.writeServiceError(w, err)
 		return
@@ -305,14 +410,15 @@ func decodeJSON(body io.Reader, target any) error {
 }
 
 type acceptedJobResponse struct {
-	JobID     string            `json:"job_id"`
-	ProjectID string            `json:"project_id"`
-	Kind      model.JobKind     `json:"kind"`
-	Status    model.JobStatus   `json:"status"`
-	Phase     model.JobPhase    `json:"phase"`
-	CreatedAt time.Time         `json:"created_at"`
-	StartedAt time.Time         `json:"started_at"`
-	Request   *model.JobRequest `json:"request,omitempty"`
+	JobID     string                `json:"job_id"`
+	ProjectID string                `json:"project_id"`
+	Kind      model.JobKind         `json:"kind"`
+	Status    model.JobStatus       `json:"status"`
+	Phase     model.JobPhase        `json:"phase"`
+	CreatedAt time.Time             `json:"created_at"`
+	StartedAt time.Time             `json:"started_at"`
+	Request   *model.JobRequest     `json:"request,omitempty"`
+	Script    *model.JobScriptState `json:"script,omitempty"`
 }
 
 func acceptedResponse(meta *model.JobMeta) acceptedJobResponse {
@@ -325,5 +431,6 @@ func acceptedResponse(meta *model.JobMeta) acceptedJobResponse {
 		CreatedAt: meta.CreatedAt,
 		StartedAt: meta.StartedAt,
 		Request:   meta.Request,
+		Script:    meta.Script,
 	}
 }

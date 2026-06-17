@@ -1,6 +1,6 @@
 # docker-updater
 
-Small host-side HTTP service for Git + Docker Compose deploy/restart/backup jobs.
+Small host-side HTTP service for Git + Docker Compose deploy/restart/backup/script jobs.
 
 ## Scope
 
@@ -11,10 +11,11 @@ v1 behavior:
 - deploy via `git fetch` + `git checkout` + `git pull --ff-only` + `docker build` + `docker compose up -d --force-recreate`
 - restart via `docker compose restart`
 - backup via timestamped zip with optional folder exclusions and retention
+- run predefined host scripts via config-defined runners, paths, cwd, and timeouts
 - runtime rollback only on deploy cutover failure
 - no repo restore
 - no app health checks
-- no arbitrary shell execution
+- no arbitrary request-time shell execution
 
 ## Layout
 
@@ -37,6 +38,11 @@ v1 behavior:
 - `GET /v1/projects/{project}/jobs/{id}/log?tail=N`
 - `GET /v1/projects/{project}/jobs/latest`
 - `GET /v1/projects/{project}/jobs/latest/log?tail=N`
+- `POST /v1/scripts/{name}`
+- `GET /v1/scripts/{name}/jobs/{id}`
+- `GET /v1/scripts/{name}/jobs/{id}/log?tail=N`
+- `GET /v1/scripts/{name}/jobs/latest`
+- `GET /v1/scripts/{name}/jobs/latest/log?tail=N`
 
 All endpoints except `/v1/healthz` require:
 
@@ -50,6 +56,14 @@ Backup config rules:
 
 - `backup.destination` must be outside every `backup.sources` tree
 - `backup.sources` must have unique basenames in v1 because archive entries are stored as `<source>/...`
+
+Script config rules:
+
+- top-level `scripts` is optional, but if present must not be empty
+- script names must match `^[a-z0-9._-]+$`
+- project id `scripts` is reserved
+- script `cwd` defaults to the directory containing `path`
+- script `timeout_seconds` defaults to `600`
 
 ## Example curl
 
@@ -67,6 +81,13 @@ curl -H 'Authorization: Bearer YOUR_TOKEN' \
 
 curl -H 'Authorization: Bearer YOUR_TOKEN' \
   'http://127.0.0.1:8765/v1/projects/{project}/jobs/latest/log?tail=100'
+
+curl -X POST \
+  -H 'Authorization: Bearer YOUR_TOKEN' \
+  http://127.0.0.1:8765/v1/scripts/rotate-logs
+
+curl -H 'Authorization: Bearer YOUR_TOKEN' \
+  http://127.0.0.1:8765/v1/scripts/rotate-logs/jobs/latest
 ```
 
 ## Build

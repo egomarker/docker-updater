@@ -50,23 +50,25 @@ func (e *ServiceError) Unwrap() error {
 }
 
 type Service struct {
-	cfg    *model.Config
-	store  *jobs.Store
-	logger *slog.Logger
+	cfg          *model.Config
+	projectStore *jobs.Store
+	scriptStore  *jobs.Store
+	logger       *slog.Logger
 
 	mu     sync.Mutex
 	active map[string]string
 }
 
-func NewService(cfg *model.Config, store *jobs.Store, logger *slog.Logger) *Service {
+func NewService(cfg *model.Config, projectStore, scriptStore *jobs.Store, logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &Service{
-		cfg:    cfg,
-		store:  store,
-		logger: logger,
-		active: make(map[string]string),
+		cfg:          cfg,
+		projectStore: projectStore,
+		scriptStore:  scriptStore,
+		logger:       logger,
+		active:       make(map[string]string),
 	}
 }
 
@@ -122,7 +124,7 @@ func (s *Service) StartDeploy(ctx context.Context, projectID string, req model.D
 		},
 	}
 
-	if err := s.store.CreateJob(meta); err != nil {
+	if err := s.projectStore.CreateJob(meta); err != nil {
 		s.releaseProject(projectID, jobID)
 		return nil, internalError("create job", err)
 	}
@@ -163,7 +165,7 @@ func (s *Service) StartRestart(ctx context.Context, projectID string) (*model.Jo
 		},
 	}
 
-	if err := s.store.CreateJob(meta); err != nil {
+	if err := s.projectStore.CreateJob(meta); err != nil {
 		s.releaseProject(projectID, jobID)
 		return nil, internalError("create job", err)
 	}
@@ -216,7 +218,7 @@ func (s *Service) StartBackup(ctx context.Context, projectID string) (*model.Job
 		},
 	}
 
-	if err := s.store.CreateJob(meta); err != nil {
+	if err := s.projectStore.CreateJob(meta); err != nil {
 		s.releaseProject(projectID, jobID)
 		return nil, internalError("create job", err)
 	}
@@ -233,7 +235,7 @@ func (s *Service) GetJob(ctx context.Context, projectID, jobID string) (*model.J
 	if _, err := s.project(projectID); err != nil {
 		return nil, err
 	}
-	meta, err := s.store.GetJob(projectID, jobID)
+	meta, err := s.projectStore.GetJob(projectID, jobID)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, notFound("job not found")
@@ -247,7 +249,7 @@ func (s *Service) GetLatestJob(ctx context.Context, projectID string) (*model.Jo
 	if _, err := s.project(projectID); err != nil {
 		return nil, err
 	}
-	meta, err := s.store.GetLatestJob(projectID)
+	meta, err := s.projectStore.GetLatestJob(projectID)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, notFound("latest job not found")
@@ -261,7 +263,7 @@ func (s *Service) GetJobLog(ctx context.Context, projectID, jobID string, tail *
 	if _, err := s.project(projectID); err != nil {
 		return "", err
 	}
-	logText, err := s.store.ReadLog(projectID, jobID, tail)
+	logText, err := s.projectStore.ReadLog(projectID, jobID, tail)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", notFound("job log not found")
@@ -322,7 +324,8 @@ func (s *Service) lockPath(projectID string) string {
 }
 
 func (s *Service) appendLog(meta *model.JobMeta, message string) {
-	if err := s.store.AppendLog(meta.ProjectID, meta.JobID, message); err != nil {
+	store := s.storeForMeta(meta)
+	if err := store.AppendLog(meta.ProjectID, meta.JobID, message); err != nil {
 		s.logger.Error("append job log failed", "project_id", meta.ProjectID, "job_id", meta.JobID, "error", err)
 	}
 }
@@ -332,7 +335,8 @@ func (s *Service) appendLogf(meta *model.JobMeta, format string, args ...any) {
 }
 
 func (s *Service) updateMeta(meta *model.JobMeta) {
-	if err := s.store.UpdateMeta(meta); err != nil {
+	store := s.storeForMeta(meta)
+	if err := store.UpdateMeta(meta); err != nil {
 		s.logger.Error("update job meta failed", "project_id", meta.ProjectID, "job_id", meta.JobID, "error", err)
 	}
 }
@@ -403,6 +407,13 @@ func (s *Service) captureLogged(ctx context.Context, meta *model.JobMeta, step m
 	})
 }
 
+func (s *Service) storeForMeta(meta *model.JobMeta) *jobs.Store {
+	if meta != nil && meta.Kind == model.JobKindScript && s.scriptStore != nil {
+		return s.scriptStore
+	}
+	return s.projectStore
+}
+
 func cloneMeta(meta *model.JobMeta) *model.JobMeta {
 	if meta == nil {
 		return nil
@@ -431,6 +442,10 @@ func cloneMeta(meta *model.JobMeta) *model.JobMeta {
 		backup.Sources = append([]string(nil), meta.Backup.Sources...)
 		backup.Exclude = append([]string(nil), meta.Backup.Exclude...)
 		clone.Backup = &backup
+	}
+	if meta.Script != nil {
+		script := *meta.Script
+		clone.Script = &script
 	}
 	if meta.FinishedAt != nil {
 		finishedAt := *meta.FinishedAt
