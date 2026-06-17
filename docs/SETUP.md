@@ -172,7 +172,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.1.2"}
+{"status":"ok","version":"1.1.3"}
 ```
 
 If that works, stop the foreground process with `Ctrl+C`.
@@ -299,7 +299,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.1.2"}
+{"status":"ok","version":"1.1.3"}
 ```
 
 From inside a Docker container that should call the updater:
@@ -430,6 +430,14 @@ A backup on a project without a `backup` block returns `400 Bad Request` (`backu
 ## 12c. Smoke test script jobs
 
 Requires a top-level `scripts` config block and a configured script name.
+
+List available scripts:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:8765/v1/scripts
+```
 
 Start a script:
 

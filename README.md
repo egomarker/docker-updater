@@ -38,6 +38,7 @@ v1 behavior:
 - `GET /v1/projects/{project}/jobs/{id}/log?tail=N`
 - `GET /v1/projects/{project}/jobs/latest`
 - `GET /v1/projects/{project}/jobs/latest/log?tail=N`
+- `GET /v1/scripts`
 - `POST /v1/scripts/{name}`
 - `GET /v1/scripts/{name}/jobs/{id}`
 - `GET /v1/scripts/{name}/jobs/{id}/log?tail=N`
@@ -81,6 +82,9 @@ curl -H 'Authorization: Bearer YOUR_TOKEN' \
 
 curl -H 'Authorization: Bearer YOUR_TOKEN' \
   'http://127.0.0.1:8765/v1/projects/{project}/jobs/latest/log?tail=100'
+
+curl -H 'Authorization: Bearer YOUR_TOKEN' \
+  http://127.0.0.1:8765/v1/scripts
 
 curl -X POST \
   -H 'Authorization: Bearer YOUR_TOKEN' \

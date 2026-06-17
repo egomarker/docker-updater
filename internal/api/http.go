@@ -51,7 +51,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	segments := splitPath(r.URL.Path)
-	if len(segments) < 3 || segments[0] != "v1" {
+	if len(segments) < 2 || segments[0] != "v1" {
 		h.writeError(w, http.StatusNotFound, "not found", nil)
 		return
 	}
@@ -84,6 +84,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.writeError(w, http.StatusNotFound, "not found", nil)
 		}
 	case "scripts":
+		if len(segments) == 2 {
+			h.handleListScripts(ctx, w, r)
+			return
+		}
 		scriptName := segments[2]
 		switch {
 		case len(segments) == 3:
@@ -159,6 +163,16 @@ func (h *Handler) handleBackup(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 
 	h.writeJSON(w, http.StatusAccepted, acceptedResponse(meta))
+}
+
+func (h *Handler) handleListScripts(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.writeMethodNotAllowed(w)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"scripts": h.service.ListScripts(ctx),
+	})
 }
 
 func (h *Handler) handleStartScript(ctx context.Context, w http.ResponseWriter, r *http.Request, name string) {
