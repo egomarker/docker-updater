@@ -5,9 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
-	"net/textproto"
 	"strconv"
 	"strings"
 	"time"
@@ -70,46 +68,21 @@ func (s *Sender) Send(ctx context.Context, n Notification) error {
 
 	url := strings.TrimRight(s.cfg.BaseURL, "/") + "/" + s.cfg.Topic
 
+	method := http.MethodPost
 	var body io.Reader
 	contentType := "text/plain; charset=utf-8"
-
 	if n.Attachment != nil && len(n.Attachment.Data) > 0 {
-		var buf bytes.Buffer
-		writer := multipart.NewWriter(&buf)
-		writeField(writer, "title", n.Title)
-		writeField(writer, "message", n.Message)
-		if len(n.Tags) > 0 {
-			writeField(writer, "tags", strings.Join(n.Tags, ","))
+		method = http.MethodPut
+		contentType = n.Attachment.ContentType
+		if contentType == "" {
+			contentType = "application/octet-stream"
 		}
-		if n.Priority > 0 {
-			writeField(writer, "priority", strconv.Itoa(n.Priority))
-		}
-
-		partContentType := n.Attachment.ContentType
-		if partContentType == "" {
-			partContentType = "application/octet-stream"
-		}
-		header := make(textproto.MIMEHeader)
-		header.Set("Content-Disposition",
-			fmt.Sprintf(`form-data; name="file"; filename=%q`, escapeQuotes(n.Attachment.Filename)))
-		header.Set("Content-Type", partContentType)
-		part, err := writer.CreatePart(header)
-		if err != nil {
-			return fmt.Errorf("create multipart part: %w", err)
-		}
-		if _, err := part.Write(n.Attachment.Data); err != nil {
-			return fmt.Errorf("write attachment: %w", err)
-		}
-		if err := writer.Close(); err != nil {
-			return fmt.Errorf("close multipart writer: %w", err)
-		}
-		contentType = writer.FormDataContentType()
-		body = &buf
+		body = bytes.NewReader(n.Attachment.Data)
 	} else {
 		body = strings.NewReader(n.Message)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
@@ -117,15 +90,17 @@ func (s *Sender) Send(ctx context.Context, n Notification) error {
 	if s.cfg.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+s.cfg.Token)
 	}
-
-	if n.Attachment == nil {
+	if n.Title != "" {
 		req.Header.Set("Title", n.Title)
-		if len(n.Tags) > 0 {
-			req.Header.Set("Tags", strings.Join(n.Tags, ","))
-		}
-		if n.Priority > 0 {
-			req.Header.Set("Priority", strconv.Itoa(n.Priority))
-		}
+	}
+	if len(n.Tags) > 0 {
+		req.Header.Set("Tags", strings.Join(n.Tags, ","))
+	}
+	if n.Priority > 0 {
+		req.Header.Set("Priority", strconv.Itoa(n.Priority))
+	}
+	if n.Attachment != nil && n.Attachment.Filename != "" {
+		req.Header.Set("Filename", n.Attachment.Filename)
 	}
 
 	resp, err := s.client.Do(req)
@@ -138,17 +113,4 @@ func (s *Sender) Send(ctx context.Context, n Notification) error {
 		return fmt.Errorf("ntfy returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
 	return nil
-}
-
-func writeField(writer *multipart.Writer, key, value string) {
-	if value == "" {
-		return
-	}
-	_ = writer.WriteField(key, value)
-}
-
-func escapeQuotes(s string) string {
-	s = strings.ReplaceAll(s, "\\", "\\\\")
-	s = strings.ReplaceAll(s, "\"", "\\\"")
-	return s
 }

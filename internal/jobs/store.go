@@ -3,6 +3,7 @@ package jobs
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,6 +128,41 @@ func (s *Store) ReadLog(projectID, jobID string, tail *int) (string, error) {
 		lines = lines[len(lines)-*tail:]
 	}
 	return strings.Join(lines, "\n") + "\n", nil
+}
+
+func (s *Store) ReadLogTailBytes(projectID, jobID string, maxBytes int) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("maxBytes must be positive")
+	}
+	file, err := os.Open(s.logPath(projectID, jobID))
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() == 0 {
+		return nil, nil
+	}
+
+	readLen := info.Size()
+	if readLen > int64(maxBytes) {
+		readLen = int64(maxBytes)
+	}
+	start := info.Size() - readLen
+	if _, err := file.Seek(start, io.SeekStart); err != nil {
+		return nil, err
+	}
+
+	buf := make([]byte, readLen)
+	n, err := io.ReadFull(file, buf)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return nil, err
+	}
+	return buf[:n], nil
 }
 
 func (s *Store) ListRunningJobs() ([]*model.JobMeta, error) {

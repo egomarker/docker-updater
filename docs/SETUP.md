@@ -172,7 +172,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.2.1"}
+{"status":"ok","version":"1.2.2"}
 ```
 
 If that works, stop the foreground process with `Ctrl+C`.
@@ -299,7 +299,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.2.1"}
+{"status":"ok","version":"1.2.2"}
 ```
 
 From inside a Docker container that should call the updater:

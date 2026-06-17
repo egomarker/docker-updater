@@ -27,6 +27,7 @@ const (
 	ErrorKindConflict     ErrorKind = "conflict"
 	ErrorKindUnauthorized ErrorKind = "unauthorized"
 	ErrorKindInternal     ErrorKind = "internal"
+	ErrorKindUpstream     ErrorKind = "upstream"
 )
 
 type ServiceError struct {
@@ -502,6 +503,10 @@ func conflict(activeJobID string) error {
 
 func internalError(message string, err error) error {
 	return &ServiceError{Kind: ErrorKindInternal, Message: message, Err: err}
+}
+
+func upstreamError(message string, err error) error {
+	return &ServiceError{Kind: ErrorKindUpstream, Message: message, Err: err}
 }
 
 func AsServiceError(err error) (*ServiceError, bool) {

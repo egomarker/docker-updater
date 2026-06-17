@@ -386,6 +386,8 @@ func (h *Handler) writeServiceError(w http.ResponseWriter, err error) {
 			extra["active_job_id"] = serviceErr.ActiveJobID
 		}
 		h.writeError(w, http.StatusConflict, serviceErr.Message, extra)
+	case update.ErrorKindUpstream:
+		h.writeError(w, http.StatusBadGateway, serviceErr.Message, nil)
 	default:
 		h.writeError(w, http.StatusInternalServerError, serviceErr.Message, nil)
 	}

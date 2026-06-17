@@ -1,6 +1,7 @@
 package update
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -18,19 +19,27 @@ func (s *Service) notify(meta *model.JobMeta, status model.JobStatus, errObj *mo
 		return
 	}
 
-	n := buildNotification(meta, status, errObj, s.defaultPriority())
+	summary := buildNotification(meta, status, errObj, s.defaultPriority())
+	var attachment *notify.Attachment
 	if errObj != nil && s.attachLogOnFailure() {
-		if att := s.buildLogAttachment(meta); att != nil {
-			n.Attachment = att
-		}
+		attachment = s.buildLogAttachment(meta)
 	}
 
 	go func() {
-		timeout := s.notifyTimeout()
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		if err := s.sender.Send(ctx, n); err != nil {
+		if err := s.sendNotification(summary); err != nil {
 			s.logger.Error("ntfy notify failed", "job_id", meta.JobID, "project_id", meta.ProjectID, "error", err)
+			return
+		}
+		if attachment != nil {
+			attachmentNote := notify.Notification{
+				Title:      summary.Title + " (log)",
+				Tags:       append([]string(nil), summary.Tags...),
+				Priority:   summary.Priority,
+				Attachment: attachment,
+			}
+			if err := s.sendNotification(attachmentNote); err != nil {
+				s.logger.Error("ntfy log attachment notify failed", "job_id", meta.JobID, "project_id", meta.ProjectID, "error", err)
+			}
 		}
 	}()
 }
@@ -40,12 +49,28 @@ func (s *Service) TestNotify(ctx context.Context) error {
 	if s.sender == nil || !s.sender.Configured() {
 		return badRequest("notify.ntfy is not configured")
 	}
-	return s.sender.Send(ctx, notify.Notification{
+	if err := s.sender.Send(ctx, notify.Notification{
 		Title:    "host-updater test",
 		Message:  "This is a test notification from host-updater.",
 		Tags:     []string{"bell"},
 		Priority: s.defaultPriority(),
-	})
+	}); err != nil {
+		return upstreamError(fmt.Sprintf("notify test failed: %v", err), err)
+	}
+	attachment := &notify.Attachment{
+		Filename:    "host-updater-notify-test.txt",
+		ContentType: "text/plain; charset=utf-8",
+		Data: []byte("host-updater notification test\n\nThis attachment verifies raw file upload notifications.\n"),
+	}
+	if err := s.sender.Send(ctx, notify.Notification{
+		Title:      "host-updater test (attachment)",
+		Tags:       []string{"bell", "paperclip"},
+		Priority:   s.defaultPriority(),
+		Attachment: attachment,
+	}); err != nil {
+		return upstreamError(fmt.Sprintf("notify test attachment failed: %v", err), err)
+	}
+	return nil
 }
 
 func (s *Service) defaultPriority() int {
@@ -79,18 +104,13 @@ func (s *Service) maxLogBytes() int {
 
 func (s *Service) buildLogAttachment(meta *model.JobMeta) *notify.Attachment {
 	store := s.storeForMeta(meta)
-	logText, err := store.ReadLog(meta.ProjectID, meta.JobID, nil)
+	data, err := store.ReadLogTailBytes(meta.ProjectID, meta.JobID, s.maxLogBytes())
 	if err != nil {
 		s.logger.Error("read job log for ntfy attachment failed", "job_id", meta.JobID, "error", err)
 		return nil
 	}
-	if strings.TrimSpace(logText) == "" {
+	if len(bytes.TrimSpace(data)) == 0 {
 		return nil
-	}
-
-	data := []byte(logText)
-	if max := s.maxLogBytes(); len(data) > max {
-		data = data[len(data)-max:]
 	}
 
 	return &notify.Attachment{
@@ -98,6 +118,13 @@ func (s *Service) buildLogAttachment(meta *model.JobMeta) *notify.Attachment {
 		ContentType: "text/plain; charset=utf-8",
 		Data:        data,
 	}
+}
+
+func (s *Service) sendNotification(n notify.Notification) error {
+	timeout := s.notifyTimeout()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return s.sender.Send(ctx, n)
 }
 
 func buildNotification(meta *model.JobMeta, status model.JobStatus, errObj *model.JobError, defaultPriority int) notify.Notification {
