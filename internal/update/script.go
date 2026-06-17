@@ -12,29 +12,13 @@ import (
 	"github.com/egomarker/docker-updater/internal/util"
 )
 
-type ScriptInfo struct {
-	Name           string `json:"name"`
-	Runner         string `json:"runner"`
-	Path           string `json:"path"`
-	Cwd            string `json:"cwd"`
-	TimeoutSeconds int    `json:"timeout_seconds"`
-}
-
-func (s *Service) ListScripts(ctx context.Context) []ScriptInfo {
-	infos := make([]ScriptInfo, 0, len(s.cfg.Scripts))
-	for name, script := range s.cfg.Scripts {
-		infos = append(infos, ScriptInfo{
-			Name:           name,
-			Runner:         script.Runner,
-			Path:           script.Path,
-			Cwd:            script.Cwd,
-			TimeoutSeconds: script.TimeoutSeconds,
-		})
+func (s *Service) ListScripts(ctx context.Context) []string {
+	names := make([]string, 0, len(s.cfg.Scripts))
+	for name := range s.cfg.Scripts {
+		names = append(names, name)
 	}
-	sort.Slice(infos, func(i, j int) bool {
-		return infos[i].Name < infos[j].Name
-	})
-	return infos
+	sort.Strings(names)
+	return names
 }
 
 func (s *Service) StartScript(ctx context.Context, name string) (*model.JobMeta, error) {

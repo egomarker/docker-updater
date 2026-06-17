@@ -172,7 +172,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.1.3"}
+{"status":"ok","version":"1.1.4"}
 ```
 
 If that works, stop the foreground process with `Ctrl+C`.
@@ -299,7 +299,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.1.3"}
+{"status":"ok","version":"1.1.4"}
 ```
 
 From inside a Docker container that should call the updater:
@@ -437,6 +437,12 @@ List available scripts:
 curl -sS \
   -H "Authorization: Bearer $TOKEN" \
   http://127.0.0.1:8765/v1/scripts
+```
+
+Expected shape:
+
+```json
+{"scripts":["rotate-logs","db-cleanup"]}
 ```
 
 Start a script:

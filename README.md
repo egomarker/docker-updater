@@ -85,7 +85,15 @@ curl -H 'Authorization: Bearer YOUR_TOKEN' \
 
 curl -H 'Authorization: Bearer YOUR_TOKEN' \
   http://127.0.0.1:8765/v1/scripts
+```
 
+The scripts list endpoint returns configured script names only:
+
+```json
+{"scripts":["rotate-logs","db-cleanup"]}
+```
+
+```bash
 curl -X POST \
   -H 'Authorization: Bearer YOUR_TOKEN' \
   http://127.0.0.1:8765/v1/scripts/rotate-logs

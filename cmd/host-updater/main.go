@@ -19,7 +19,7 @@ import (
 	"github.com/egomarker/docker-updater/internal/update"
 )
 
-const version = "1.1.3"
+const version = "1.1.4"
 
 func main() {
 	var configPath string
