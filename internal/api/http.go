@@ -103,6 +103,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			h.writeError(w, http.StatusNotFound, "not found", nil)
 		}
+	case "notify":
+		if len(segments) == 3 && segments[2] == "test" {
+			h.handleNotifyTest(ctx, w, r)
+			return
+		}
+		h.writeError(w, http.StatusNotFound, "not found", nil)
 	default:
 		h.writeError(w, http.StatusNotFound, "not found", nil)
 	}
@@ -173,6 +179,21 @@ func (h *Handler) handleListScripts(ctx context.Context, w http.ResponseWriter, 
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"scripts": h.service.ListScripts(ctx),
 	})
+}
+
+func (h *Handler) handleNotifyTest(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		h.writeMethodNotAllowed(w)
+		return
+	}
+	if r.Body != nil {
+		_, _ = io.Copy(io.Discard, r.Body)
+	}
+	if err := h.service.TestNotify(ctx); err != nil {
+		h.writeServiceError(w, err)
+		return
+	}
+	h.writeJSON(w, http.StatusOK, map[string]any{"status": "sent"})
 }
 
 func (h *Handler) handleStartScript(ctx context.Context, w http.ResponseWriter, r *http.Request, name string) {

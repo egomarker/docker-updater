@@ -44,6 +44,7 @@ v1 behavior:
 - `GET /v1/scripts/{name}/jobs/{id}/log?tail=N`
 - `GET /v1/scripts/{name}/jobs/latest`
 - `GET /v1/scripts/{name}/jobs/latest/log?tail=N`
+- `POST /v1/notify/test`
 
 All endpoints except `/v1/healthz` require:
 
@@ -65,6 +66,18 @@ Script config rules:
 - project id `scripts` is reserved
 - script `cwd` defaults to the directory containing `path`
 - script `timeout_seconds` defaults to `600`
+
+Notify (ntfy) config rules:
+
+- top-level `notify` is optional
+- `notify.ntfy.base_url` is required and must start with `http://` or `https://`
+- `notify.ntfy.topic` is required and must match `^[a-zA-Z0-9_-]{1,64}$`
+- `notify.ntfy.token` is optional (Bearer token for self-hosted ntfy auth)
+- `notify.ntfy.priority` defaults to `3`; failures always notify at priority `5`
+- `notify.ntfy.timeout_seconds` defaults to `5`
+- `notify.ntfy.attach_log_on_failure` defaults to `true`
+- `notify.ntfy.max_log_bytes` defaults to `262144` (256 KiB); larger logs are tailed to the last N bytes
+- notifications are best-effort: a failed send never affects the job status
 
 ## Example curl
 

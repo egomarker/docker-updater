@@ -16,6 +16,9 @@ import (
 const defaultMaxTailLines = 10000
 const defaultZipPath = "/usr/bin/zip"
 const defaultScriptTimeoutSeconds = 600
+const defaultNtfyPriority = 3
+const defaultNtfyTimeoutSeconds = 5
+const defaultNtfyMaxLogBytes = 262144
 
 func DefaultPath() string {
 	home, err := os.UserHomeDir()
@@ -123,6 +126,20 @@ func applyDefaults(cfg *model.Config, baseDir string) {
 			script.TimeoutSeconds = defaultScriptTimeoutSeconds
 		}
 		cfg.Scripts[scriptName] = script
+	}
+
+	if cfg.Notify != nil && cfg.Notify.Ntfy != nil {
+		ntfy := *cfg.Notify.Ntfy
+		if ntfy.Priority <= 0 {
+			ntfy.Priority = defaultNtfyPriority
+		}
+		if ntfy.TimeoutSeconds <= 0 {
+			ntfy.TimeoutSeconds = defaultNtfyTimeoutSeconds
+		}
+		if ntfy.MaxLogBytes <= 0 {
+			ntfy.MaxLogBytes = defaultNtfyMaxLogBytes
+		}
+		cfg.Notify.Ntfy = &ntfy
 	}
 }
 
@@ -234,6 +251,10 @@ func validate(cfg *model.Config) error {
 		cfg.Scripts[scriptName] = script
 	}
 
+	if err := validateNotify(cfg.Notify); err != nil {
+		return err
+	}
+
 	if err := validateExecutablePath(cfg.Executables.Git); err != nil {
 		return fmt.Errorf("config.executables.git: %w", err)
 	}
@@ -319,6 +340,47 @@ func isSameOrDescendant(path, root string) bool {
 		return true
 	}
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+}
+
+func validateNotify(notify *model.NotifyConfig) error {
+	if notify == nil {
+		return nil
+	}
+	if notify.Ntfy == nil {
+		return nil
+	}
+	ntfy := notify.Ntfy
+	if strings.TrimSpace(ntfy.BaseURL) == "" {
+		return fmt.Errorf("config.notify.ntfy.base_url is required")
+	}
+	if !isValidNtfyBaseURL(ntfy.BaseURL) {
+		return fmt.Errorf("config.notify.ntfy.base_url must start with http:// or https://")
+	}
+	if strings.TrimSpace(ntfy.Topic) == "" {
+		return fmt.Errorf("config.notify.ntfy.topic is required")
+	}
+	if !isValidNtfyTopic(ntfy.Topic) {
+		return fmt.Errorf("config.notify.ntfy.topic must match ^[a-zA-Z0-9_-]{1,64}$")
+	}
+	if ntfy.Priority != 0 && (ntfy.Priority < 1 || ntfy.Priority > 5) {
+		return fmt.Errorf("config.notify.ntfy.priority must be between 1 and 5")
+	}
+	if ntfy.TimeoutSeconds != 0 && ntfy.TimeoutSeconds < 1 {
+		return fmt.Errorf("config.notify.ntfy.timeout_seconds must be positive")
+	}
+	if ntfy.MaxLogBytes != 0 && ntfy.MaxLogBytes < 1 {
+		return fmt.Errorf("config.notify.ntfy.max_log_bytes must be positive")
+	}
+	return nil
+}
+
+func isValidNtfyBaseURL(value string) bool {
+	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
+}
+
+func isValidNtfyTopic(topic string) bool {
+	matched, err := regexp.MatchString("^[a-zA-Z0-9_-]{1,64}$", topic)
+	return err == nil && matched
 }
 
 func isValidScriptName(name string) bool {

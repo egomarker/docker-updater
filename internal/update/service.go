@@ -14,6 +14,7 @@ import (
 	projectlock "github.com/egomarker/docker-updater/internal/lock"
 	"github.com/egomarker/docker-updater/internal/jobs"
 	"github.com/egomarker/docker-updater/internal/model"
+	"github.com/egomarker/docker-updater/internal/notify"
 	"github.com/egomarker/docker-updater/internal/runner"
 	"github.com/egomarker/docker-updater/internal/util"
 )
@@ -54,6 +55,7 @@ type Service struct {
 	projectStore *jobs.Store
 	scriptStore  *jobs.Store
 	logger       *slog.Logger
+	sender       *notify.Sender
 
 	mu     sync.Mutex
 	active map[string]string
@@ -63,13 +65,31 @@ func NewService(cfg *model.Config, projectStore, scriptStore *jobs.Store, logger
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Service{
+	svc := &Service{
 		cfg:          cfg,
 		projectStore: projectStore,
 		scriptStore:  scriptStore,
 		logger:       logger,
 		active:       make(map[string]string),
 	}
+	svc.sender = buildSender(cfg)
+	return svc
+}
+
+func buildSender(cfg *model.Config) *notify.Sender {
+	if cfg == nil || cfg.Notify == nil || cfg.Notify.Ntfy == nil {
+		return nil
+	}
+	ntfy := cfg.Notify.Ntfy
+	return notify.NewSender(notify.Config{
+		BaseURL:            ntfy.BaseURL,
+		Topic:              ntfy.Topic,
+		Token:              ntfy.Token,
+		Priority:           ntfy.Priority,
+		TimeoutSeconds:     ntfy.TimeoutSeconds,
+		AttachLogOnFailure: ntfy.AttachLogOnFailureValue(),
+		MaxLogBytes:        ntfy.MaxLogBytes,
+	})
 }
 
 func (s *Service) StartDeploy(ctx context.Context, projectID string, req model.DeployRequest) (*model.JobMeta, error) {
@@ -354,6 +374,7 @@ func (s *Service) finish(meta *model.JobMeta, status model.JobStatus, errObj *mo
 	meta.Error = errObj
 	s.updateMeta(meta)
 	s.appendLogf(meta, "JOB finished status=%s", status)
+	s.notify(meta, status, errObj)
 }
 
 func (s *Service) normalizeJobError(step model.JobPhase, message string, err error) *model.JobError {

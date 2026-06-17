@@ -172,7 +172,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.1.4"}
+{"status":"ok","version":"1.2.0"}
 ```
 
 If that works, stop the foreground process with `Ctrl+C`.
@@ -299,7 +299,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.1.4"}
+{"status":"ok","version":"1.2.0"}
 ```
 
 From inside a Docker container that should call the updater:
@@ -471,6 +471,103 @@ Expected:
 - success/failure is recorded in normal job meta and logs
 
 An unknown script name returns `404 Not Found` (`script not found`).
+
+---
+
+## 12d. (Optional) ntfy notifications
+
+host-updater can send a short ntfy notification when any deploy, restart, backup, or
+script job finishes (success or failure). On failure it can also attach the job log.
+
+### Self-hosted ntfy server
+
+Run ntfy (Docker):
+
+```bash
+docker run -d --name ntfy --restart=unless-stopped \
+  -p 8090:80 \
+  -v /var/lib/ntfy:/var/lib/ntfy \
+  -v /etc/ntfy:/etc/ntfy \
+  binwiederhier/ntfy serve
+```
+
+`/etc/ntfy/server.yml`:
+
+```yaml
+base_url: "https://ntfy.example.com"
+listen: ":80"
+auth-file: "/var/lib/ntfy/user.db"
+auth-default-access: "deny-all"
+attachment-cache-dir: "/var/lib/ntfy/attachments"
+attachment-file-size-limit: "1M"
+behind-proxy: true
+```
+
+Restart ntfy after editing. Put it behind a TLS-terminating reverse proxy (Caddy/nginx)
+for HTTPS — tokens and topics must travel over TLS.
+
+### Add users
+
+```bash
+docker exec -it ntfy ntfy user add --admin admin       # admin
+docker exec -it ntfy ntfy user add host-updater        # the writer (the updater)
+docker exec -it ntfy ntfy user add phone-reader        # your phone subscriber
+```
+
+### Grant topic access
+
+Topics are not pre-created — they exist once someone publishes. With
+`auth-default-access: deny-all`, only explicitly granted users can use a topic.
+"Adding a topic" = granting access to it:
+
+```bash
+# updater may only write
+docker exec -it ntfy ntfy access host-updater host-updater-results write-only
+# your phone may only read
+docker exec -it ntfy ntfy access phone-reader host-updater-results read-only
+```
+
+### Create a write token for the updater
+
+```bash
+docker exec -it ntfy ntfy token add --user host-updater host-updater-results
+```
+
+Returns `tk_xxxxx...`. Put that in `config.json` → `notify.ntfy.token`.
+
+### Subscribe on the phone
+
+ntfy app → Add subscription → Server = yours → Topic `host-updater-results` →
+username `phone-reader`, password you set.
+
+### host-updater config
+
+Add a top-level `notify` block:
+
+```json
+"notify": {
+  "ntfy": {
+    "base_url": "https://ntfy.example.com",
+    "topic": "host-updater-results",
+    "token": "tk_xxxxxxxxxxxxxxxx",
+    "priority": 3,
+    "timeout_seconds": 5,
+    "attach_log_on_failure": true,
+    "max_log_bytes": 262144
+  }
+}
+```
+
+Reload host-updater, then test:
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:8765/v1/notify/test
+```
+
+Expected: `{"status":"sent"}` and a notification on the phone. A send error returns
+its HTTP status/message but never affects job status (notifications are best-effort).
 
 ---
 

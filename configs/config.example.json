@@ -65,5 +65,16 @@
       "path": "/Users/you/scripts/db_cleanup.py",
       "timeout_seconds": 120
     }
+  },
+  "notify": {
+    "ntfy": {
+      "base_url": "https://ntfy.example.com",
+      "topic": "host-updater-results",
+      "token": "tk_xxxxxxxxxxxxxxxx",
+      "priority": 3,
+      "timeout_seconds": 5,
+      "attach_log_on_failure": true,
+      "max_log_bytes": 262144
+    }
   }
 }

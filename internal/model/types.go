@@ -13,6 +13,7 @@ type Config struct {
 	Limits      LimitsConfig             `json:"limits"`
 	Projects    map[string]ProjectConfig `json:"projects"`
 	Scripts     map[string]ScriptConfig  `json:"scripts,omitempty"`
+	Notify      *NotifyConfig            `json:"notify,omitempty"`
 }
 
 type ServerConfig struct {
@@ -56,6 +57,25 @@ type ScriptConfig struct {
 	Path           string `json:"path"`
 	Cwd            string `json:"cwd"`
 	TimeoutSeconds int    `json:"timeout_seconds"`
+}
+
+type NotifyConfig struct {
+	Ntfy *NtfyConfig `json:"ntfy,omitempty"`
+}
+
+type NtfyConfig struct {
+	BaseURL            string `json:"base_url"`
+	Topic              string `json:"topic"`
+	Token              string `json:"token"`
+	Priority           int    `json:"priority"`            // default 3
+	TimeoutSeconds     int    `json:"timeout_seconds"`     // default 5
+	AttachLogOnFailure *bool  `json:"attach_log_on_failure"` // default true
+	MaxLogBytes        int    `json:"max_log_bytes"`       // default 262144
+}
+
+// AttachLogOnFailureValue resolves the pointer, defaulting to true when unset.
+func (n *NtfyConfig) AttachLogOnFailureValue() bool {
+	return n.AttachLogOnFailure == nil || *n.AttachLogOnFailure
 }
 
 type GitProjectConfig struct {
