@@ -44,6 +44,26 @@ func (s *Service) notify(meta *model.JobMeta, status model.JobStatus, errObj *mo
 	}()
 }
 
+func (s *Service) NotifyStartup(version string) {
+	if s.sender == nil || !s.sender.Configured() {
+		return
+	}
+	version = strings.TrimSpace(version)
+	if version == "" {
+		version = "unknown"
+	}
+	go func() {
+		if err := s.sendNotification(notify.Notification{
+			Title:    "host-updater restarted",
+			Message:  fmt.Sprintf("host restarted, version %s", version),
+			Tags:     []string{"arrows_counterclockwise"},
+			Priority: s.defaultPriority(),
+		}); err != nil {
+			s.logger.Error("ntfy startup notify failed", "version", version, "error", err)
+		}
+	}()
+}
+
 // TestNotify publishes a fixed test message using the current notify config.
 func (s *Service) TestNotify(ctx context.Context) error {
 	if s.sender == nil || !s.sender.Configured() {

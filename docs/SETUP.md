@@ -172,7 +172,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.2.2"}
+{"status":"ok","version":"1.2.3"}
 ```
 
 If that works, stop the foreground process with `Ctrl+C`.
@@ -299,7 +299,7 @@ curl http://127.0.0.1:8765/v1/healthz
 Expected:
 
 ```json
-{"status":"ok","version":"1.2.2"}
+{"status":"ok","version":"1.2.3"}
 ```
 
 From inside a Docker container that should call the updater:
@@ -566,8 +566,11 @@ curl -sS -X POST \
   http://127.0.0.1:8765/v1/notify/test
 ```
 
-Expected: `{"status":"sent"}` and a notification on the phone. A send error returns
+Expected: `{"status":"sent"}` and notifications on the phone. A send error returns
 its HTTP status/message but never affects job status (notifications are best-effort).
+
+When `notify.ntfy` is configured, host-updater also sends a startup notification on app start:
+`host restarted, version <number>`.
 
 ---
 

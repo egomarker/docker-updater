@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,7 +20,7 @@ import (
 	"github.com/egomarker/docker-updater/internal/update"
 )
 
-const version = "1.2.2"
+const version = "1.2.3"
 
 func main() {
 	var configPath string
@@ -89,8 +90,15 @@ func main() {
 		}
 	}()
 
+	listener, err := net.Listen("tcp", cfg.Server.ListenAddress)
+	if err != nil {
+		logger.Error("http listen failed", "addr", cfg.Server.ListenAddress, "error", err)
+		os.Exit(1)
+	}
+
 	logger.Info("host-updater starting", "addr", cfg.Server.ListenAddress, "config", configPath, "version", version)
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	service.NotifyStartup(version)
+	if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("http server failed", "error", err)
 		os.Exit(1)
 	}
